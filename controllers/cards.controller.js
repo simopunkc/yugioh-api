@@ -1,7 +1,22 @@
 require('dotenv').config();
-const { fetchApi } = require('../apis/yugioh');
+const { fetchUncachedApi, fetchApi } = require('../apis/yugioh');
 const { getOffset } = require('../modules/pagination.module');
 const { checkSimilarity } = require('../modules/levenshtein-distance.module');
+
+const updateCacheCards = async (_, res) => {
+  try {
+    await fetchUncachedApi();
+    return res.status(200).json({
+      status: true,
+      message: `cache has been successfully updated`
+    })
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      error: error.message,
+    })
+  }
+}
 
 const getListCards = async (req, res) => {
   const { page } = req.params;
@@ -79,16 +94,20 @@ const getSingleCard = async (req, res) => {
     const fetchedData = await fetchApi();
     let fetchedCard = fetchedData.data.filter((v) => v.id === parseInt(id));
     if (fetchedCard.length > 0) {
+      let fetchedSingleCard = []
+      for (const v of fetchedCard) {
+        fetchedSingleCard.push({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          desc: v.desc,
+          card_images: v.card_images,
+        });
+      }
       return res.status(200).json({
         status: true,
         message: 'get single movie',
-        data: {
-          id: fetchedCard[0].id,
-          name: fetchedCard[0].name,
-          type: fetchedCard[0].type,
-          desc: fetchedCard[0].desc,
-          card_images: fetchedCard[0].card_images,
-        },
+        data: fetchedSingleCard,
       })
     } else {
       return res.status(404).json({
@@ -105,6 +124,7 @@ const getSingleCard = async (req, res) => {
 }
 
 module.exports = {
+  updateCacheCards,
   getListCards,
   getListSearchCards,
   getSingleCard,

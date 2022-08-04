@@ -1,54 +1,55 @@
-const axios = require("axios");
 const fs = require('fs').promises;
 const https = require('https');
+const randomUseragent = require('random-useragent');
+require('dotenv').config();
+const { env } = process;
 
-const baseUrl = 'https://db.ygoprodeck.com/';
-const endpoint = 'api/v7/cardinfo.php';
-const cacheData = './models/yugioh.model.json';
+const baseUrl = 'db.ygoprodeck.com';
+const endpoint = '/api/v7/cardinfo.php';
+const cacheData = env.PATH_API_CACHE;
+const agent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 1,
+  keepAliveMsecs: 10000
+});
 
-const yugioh = (parameters) => {
-  return axios.create({
-    baseURL: baseUrl,
-    params: parameters,
-    timeout: 0,
-    maxContentLength: 900000000,
-    maxBodyLength: 9000000000,
-    httpsAgent: new https.Agent({ keepAlive: true }),
+const fetchYugiohApi = () => {
+  const options = {
+    agent: agent,
+    host: baseUrl,
+    path: endpoint,
+    port: 443,
+    method: "GET",
+    headers: {
+      'User-Agent': randomUseragent.getRandom(),
+      'Connection': 'keep-alive'
+    }
+  };
+  return new Promise((resolve, reject) => {
+    https.get(options, res => {
+      res.setEncoding('utf8');
+      const body = [];
+      res.on('data', chunk => body.push(chunk));
+      res.on('end', () => resolve(JSON.parse(body.join(''))));
+    }).on('error', reject);
   });
 }
 
-const initModel = async () => {
-  let model = {};
-  try {
-    model = await fs.readFile(cacheData, 'utf-8');
-    model = JSON.parse(model);
-  } catch (e) {
-    await fs.writeFile(cacheData, "[]");
-  }
-  return model;
+const fetchUncachedApi = async () => {
+  const now = await new Date().getTime();
+  const expired = 86400000; // 1 day
+  let api = await fetchYugiohApi();
+  api.expired = now + expired;
+  await fs.writeFile(cacheData, JSON.stringify(api));
 }
 
 const fetchApi = async () => {
-  let api
-  try {
-    api = await initModel();
-    const now = new Date().getTime();
-    const expired = 86400000; // 1 day
-    if (!api.expired || api.expired < now) {
-      const apiGet = await yugioh({});
-      api = await apiGet.get(endpoint);
-      if (api.status == 200) {
-        api = api.data;
-        api.expired = now + expired;
-        await fs.writeFile(cacheData, JSON.stringify(api));
-      }
-    }
-  } catch (e) {
-    console.log(e.message)
-  }
+  let api = await fs.readFile(cacheData, 'utf-8');
+  api = await JSON.parse(api);
   return api;
 }
 
 module.exports = {
+  fetchUncachedApi,
   fetchApi
 };
