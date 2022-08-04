@@ -11,5 +11,12 @@ app.use(cors());
 app.use('/cards', cards);
 app.use('/card', card);
 app.use('/updates', updates);
+app.use((_, res) => {
+  res.status(404);
+  res.json({
+    status: false,
+    message: 'please check your path url',
+  });
+});
 app.use(timeout(20 * 60 * 1000)); // 10 minutes
 module.exports = app
